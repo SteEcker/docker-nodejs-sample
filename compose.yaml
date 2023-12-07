@@ -1,0 +1,52 @@
+services:
+
+  # Defines the 'server' service for your Node.js application
+  server:
+    build:                # Instructions for building the Docker image
+      context: .          # The build context is set to the current directory
+      target: dev        # Specifies the target build stage to use (for multi-stage builds)
+    environment:          # Environment variables for the container
+      NODE_ENV: production
+      POSTGRES_HOST: db   # Hostname for the PostgreSQL service
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/db-password  # Path to the secret containing the DB password
+      POSTGRES_DB: example
+    ports:                # Port mapping between the host and the container
+      - 3000:3000         # Maps port 3000 of the host to port 3000 of the container
+      - 9229:9229         # Maps port 9229 of the host to port 9229 of the container (usually for debugging)
+    depends_on:           # Specifies dependencies of this service
+      db:                 # Indicates that 'server' depends on 'db'
+        condition: service_healthy  # Waits for 'db' to be in a healthy state before starting 'server'
+    secrets:              # Specifies secrets to be used by this service
+      - db-password       # Uses the 'db-password' secret
+    volumes:              # Mounts volumes into the service's containers
+      - ./src:/usr/src/app/src  # Mounts the './src' directory from the host to '/usr/src/app/src' in the container
+
+  # Defines the 'db' service for the PostgreSQL database
+  db:
+    image: postgres       # Uses the official 'postgres' image from Docker Hub
+    restart: always       # Always restart the container if it stops
+    user: postgres        # Runs the container as the 'postgres' user
+    secrets:              # Uses secrets, similar to the 'server' service
+      - db-password
+    volumes:              # Persistent storage for PostgreSQL data
+      - db-data:/var/lib/postgresql/data  # Maps the named volume 'db-data' to store database files
+    environment:          # Environment variables for the PostgreSQL service
+      - POSTGRES_DB=example
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
+    expose:               # Exposes ports without publishing them to the host
+      - 5432              # Exposes PostgreSQL default port 5432
+    healthcheck:          # Health check configuration for the container
+      test: [ "CMD", "pg_isready" ]  # Command to check database readiness
+      interval: 10s       # Interval between health checks
+      timeout: 5s         # Time to wait before considering the check as failed
+      retries: 5          # Number of retries before considering the service as unhealthy
+
+# Defines volumes used by the services
+volumes:
+  db-data:               # Named volume for persisting PostgreSQL data
+
+# Defines secrets used by the services
+secrets:
+  db-password:           # Secret for the database password
+    file: db/password.txt  # The file containing the secret data
